@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PDF Chatbot</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        #chatContainer {
+            width: 400px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #chatHeader {
+            background-color: #00a8ff;
+            color: white;
+            padding: 12px;
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            position: relative;
+        }
+
+        #sessionId {
+            position: absolute;
+            right: 10px;
+            top: 12px;
+            font-size: 12px;
+            background: rgba(255,255,255,0.3);
+            padding: 2px 6px;
+            border-radius: 6px;
+        }
+
+        #chatbox {
+            padding: 10px;
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .message {
+            margin: 6px 0;
+            padding: 8px 12px;
+            border-radius: 12px;
+            max-width: 75%;
+            word-wrap: break-word;
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .user {
+            align-self: flex-end;
+            background-color: #d1ecf1;
+            color: #007c91;
+        }
+
+        .bot {
+            align-self: flex-start;
+            background-color: #f5f5f5;
+            color: #000;
+        }
+
+        .message-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            margin-right: 8px;
+            flex-shrink: 0;
+        }
+
+        #inputSection {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+            background: #fafafa;
+            align-items: center;
+        }
+
+        #userQuestion {
+            flex: 1;
+            padding: 10px;
+            border-radius: 20px;
+            border: 1px solid #ccc;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .icon-btn {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            border: none;
+            background-color: #44bd32;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-left: 5px;
+        }
+
+        #uploadBtn {
+            padding: 8px 12px;
+            border-radius: 20px;
+            background-color: #00a8ff;
+            color: white;
+            cursor: pointer;
+            border: none;
+            margin-left: 5px;
+            display: none;
+        }
+
+        #uploadStatus {
+            text-align: center;
+            font-size: 12px;
+            color: #2f3640;
+            padding: 4px 0;
+        }
+
+        #progressContainer {
+            width: 90%;
+            height: 8px;
+            background: #dcdde1;
+            border-radius: 4px;
+            margin: 5px auto;
+            display: none;
+        }
+
+        #progressBar {
+            height: 100%;
+            width: 0%;
+            background: #00a8ff;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chatContainer">
+        <div id="chatHeader">
+            PDF Chatbot
+            <span id="sessionId"></span>
+        </div>
+        <div id="chatbox"></div>
+
+        <div id="inputSection">
+            <label class="icon-btn" for="pdfInput">+</label>
+            <input type="file" id="pdfInput" multiple accept=".pdf" style="display:none;">
+            <button id="uploadBtn">Upload</button>
+            <input type="text" id="userQuestion" placeholder="Type your question...">
+            <button class="icon-btn" onclick="sendQuestion()">&#9658;</button>
+        </div>
+        <div id="progressContainer">
+            <div id="progressBar"></div>
+        </div>
+        <div id="uploadStatus"></div>
+    </div>
+
+<script>
+const API_UPLOAD = "http://127.0.0.1:8000/upload";
+const API_CHAT = "http://127.0.0.1:8000/chatbot";
+
+// Generate a new session ID on each refresh
+const USER_ID = 'user_' + Math.random().toString(36).substr(2, 9);
+document.getElementById('sessionId').innerText = USER_ID;
+console.log("Session ID:", USER_ID);
+
+const pdfInput = document.getElementById('pdfInput');
+const uploadBtn = document.getElementById('uploadBtn');
+const progressContainer = document.getElementById('progressContainer');
+const progressBar = document.getElementById('progressBar');
+
+// Show Upload button when files selected
+pdfInput.addEventListener('change', () => {
+    if(pdfInput.files.length > 0) uploadBtn.style.display = "inline-block";
+    else uploadBtn.style.display = "none";
+});
+
+// Upload PDFs with progress
+uploadBtn.addEventListener('click', () => {
+    const files = pdfInput.files;
+    if (files.length === 0) return;
+
+    const formData = new FormData();
+    for (let i = 0; i < files.length; i++) {
+        formData.append('file', files[i]);
+    }
+
+    progressContainer.style.display = "block";
+    progressBar.style.width = "0%";
+
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", API_UPLOAD);
+    xhr.setRequestHeader("user-id", USER_ID);
+
+    xhr.upload.onprogress = function(event) {
+        if (event.lengthComputable) {
+            const percent = Math.round((event.loaded / event.total) * 100);
+            progressBar.style.width = percent + "%";
+        }
+    };
+
+    xhr.onload = function() {
+        if (xhr.status === 200 || xhr.status === 201) {
+            const data = JSON.parse(xhr.responseText);
+            document.getElementById('uploadStatus').innerText = data.message || data.detail;
+        } else {
+            document.getElementById('uploadStatus').innerText = "Upload failed: " + xhr.statusText;
+        }
+        progressContainer.style.display = "none";
+        uploadBtn.style.display = "none";
+        pdfInput.value = "";
+    };
+
+    xhr.onerror = function() {
+        document.getElementById('uploadStatus').innerText = "Upload failed: network error";
+        progressContainer.style.display = "none";
+    };
+
+    xhr.send(formData);
+});
+
+// Send question
+async function sendQuestion() {
+    const question = document.getElementById('userQuestion').value.trim();
+    if (!question) return;
+
+    appendChat('user', question);
+    document.getElementById('userQuestion').value = "";
+
+    try {
+        const res = await fetch(API_CHAT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'user-id': USER_ID
+            },
+            body: JSON.stringify({ question })
+        });
+        const data = await res.json();
+        appendChat('bot', data.answer || data.detail);
+    } catch (err) {
+        appendChat('bot', "Error: " + err);
+    }
+}
+
+// Append messages
+function appendChat(role, text) {
+    const chatbox = document.getElementById('chatbox');
+    const div = document.createElement('div');
+    div.className = 'message ' + role;
+
+    const icon = document.createElement('div');
+    icon.className = 'message-icon';
+    icon.innerText = role === 'user' ? 'U' : 'B';
+
+    const content = document.createElement('span');
+    // Render bold for headings if Markdown style exists
+    content.innerHTML = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
+    div.appendChild(icon);
+    div.appendChild(content);
+
+    chatbox.appendChild(div);
+    chatbox.scrollTop = chatbox.scrollHeight;
+}
+</script>
+</body>
+</html>
